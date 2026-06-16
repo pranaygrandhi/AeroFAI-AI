@@ -1,12 +1,36 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import api_router
-from app.core.config import settings
+from contextlib import asynccontextmanager
+import logging
+
+from .api.routes import api_router
+from .core.config import settings
+from .core.database import init_db, close_db
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Async context manager for app startup and shutdown."""
+    # Startup
+    logger.info("Starting up AeroFAI backend...")
+    await init_db()
+    logger.info("Database initialized successfully")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down AeroFAI backend...")
+    await close_db()
+    logger.info("Database connection closed")
+
 
 app = FastAPI(
     title="AeroFAI AI",
     version="0.1.0",
     description="AS9102 First Article Inspection platform backend",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -22,16 +46,4 @@ app.include_router(api_router, prefix="/api")
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
-
-
-@app.on_event("startup")
-def on_startup():
-    # TODO: initialize database connections, cache, and task queue
-    pass
-
-
-@app.on_event("shutdown")
-def on_shutdown():
-    # TODO: gracefully close external resources
-    pass
+    return {"status": "ok", "environment": settings.environment}

@@ -14,7 +14,14 @@ class Settings(BaseSettings):
     database_url: PostgresDsn = "postgresql+asyncpg://user:password@localhost:5432/aerofai"
     redis_url: str = "redis://localhost:6379/0"
 
-    cors_origins: List[str] = ["http://localhost:3000"]
+    cors_origins: List[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
     s3_bucket: str = ""
     s3_region: str = ""
 

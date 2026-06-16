@@ -6,8 +6,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from app.core.config import settings
-from app.schemas.user import Token, UserCreate, UserRead
+from ..core.config import settings
+from ..schemas.user import Token, UserCreate, UserRead
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

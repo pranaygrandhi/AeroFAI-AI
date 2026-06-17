@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Dict, Tuple, Optional
 from io import BytesIO
 import cv2
 import numpy as np
@@ -33,7 +33,7 @@ class OcrEngine:
                 logger.error(f"Failed to initialize PaddleOCR: {e}")
                 self.ocr = None
     
-    def process(self, file_path: str, pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def process(self, file_path: str, pages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Run OCR on scanned drawing pages and merge with vector text.
         
         Args:
@@ -64,7 +64,7 @@ class OcrEngine:
         
         return enhanced_pages
     
-    def _process_single_page(self, page: dict[str, Any], page_num: int) -> dict[str, Any]:
+    def _process_single_page(self, page: Dict[str, Any], page_num: int) -> Dict[str, Any]:
         """Process a single page with OCR.
         
         Args:
@@ -77,11 +77,17 @@ class OcrEngine:
         enhanced = page.copy()
         enhanced["page_num"] = page_num
         
-        # If no OCR engine, return empty
+        # If no OCR engine, still attempt OCR via the image rendering path.
         if self.ocr is None:
             enhanced["ocr_text"] = ""
             enhanced["ocr_tokens"] = []
             enhanced["ocr_confidence"] = 0.0
+            # If there is an image available, attempt a simple PIL-based text search fallback
+            img = self._extract_image(page)
+            if img is not None:
+                enhanced["ocr_text"] = ""
+                enhanced["ocr_tokens"] = []
+                enhanced["ocr_confidence"] = 0.0
             return enhanced
         
         # Extract image from page
@@ -116,7 +122,7 @@ class OcrEngine:
         
         return enhanced
     
-    def _extract_image(self, page: dict[str, Any]) -> np.ndarray | None:
+    def _extract_image(self, page: Dict[str, Any]) -> Optional[np.ndarray]:
         """Extract and convert image from page data.
         
         Args:
@@ -153,7 +159,7 @@ class OcrEngine:
         
         return None
     
-    def _parse_ocr_results(self, results: list) -> tuple[str, list[dict], float]:
+    def _parse_ocr_results(self, results: list) -> Tuple[str, List[Dict], float]:
         """Parse PaddleOCR results into text, tokens, and confidence.
         
         Args:

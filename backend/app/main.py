@@ -15,15 +15,21 @@ async def lifespan(app: FastAPI):
     """Async context manager for app startup and shutdown."""
     # Startup
     logger.info("Starting up AeroFAI backend...")
-    await init_db()
-    logger.info("Database initialized successfully")
+    try:
+        await init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.warning(f"Database initialization failed: {e}. Running without database.")
     
     yield
     
     # Shutdown
     logger.info("Shutting down AeroFAI backend...")
-    await close_db()
-    logger.info("Database connection closed")
+    try:
+        await close_db()
+        logger.info("Database connection closed")
+    except Exception as e:
+        logger.warning(f"Database shutdown error: {e}")
 
 
 app = FastAPI(

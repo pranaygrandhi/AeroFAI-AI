@@ -79,14 +79,22 @@ class PdfParser:
                         blur = cv2.GaussianBlur(gray, (5, 5), 0)
                         _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
                         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                        # page pixel dimensions at current zoom
+                        page_w_px = width * zoom
+                        page_h_px = height * zoom
+
                         for contour in contours:
                             area = cv2.contourArea(contour)
                             if area < 150:
                                 continue
+                            # ignore contours that cover almost the whole page (likely background/frame)
+                            if area > cv_img.shape[0] * cv_img.shape[1] * 0.6:
+                                continue
                             (cx, cy), radius = cv2.minEnclosingCircle(contour)
-                            if radius > 8:
+                            # ignore extremely large circles (page border) and very small noise
+                            if radius > 8 and radius < max(page_w_px, page_h_px) * 0.45:
                                 circ_area = math.pi * radius * radius
-                                if area / circ_area > 0.55:
+                                if circ_area > 0 and area / circ_area > 0.55:
                                     shapes.append({
                                         "type": "circle",
                                         "center": [int(cx / zoom), int(cy / zoom)],
@@ -103,6 +111,11 @@ class PdfParser:
                             approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
                             if len(approx) == 4 and area > 500:
                                 x0, y0, w, h = cv2.boundingRect(approx)
+                                # filter out tiny artifacts and huge page-spanning rectangles
+                                if w < 10 or h < 10:
+                                    continue
+                                if w > cv_img.shape[1] * 0.8 or h > cv_img.shape[0] * 0.8:
+                                    continue
                                 shapes.append({
                                     "type": "rect",
                                     "center": [int((x0 + x0 + w) / 2 / zoom), int((y0 + y0 + h) / 2 / zoom)],

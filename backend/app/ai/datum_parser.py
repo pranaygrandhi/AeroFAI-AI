@@ -1,5 +1,8 @@
+import logging
 from typing import Any
 import re
+
+logger = logging.getLogger(__name__)
 
 
 class DatumParser:
@@ -10,18 +13,21 @@ class DatumParser:
 
         for page in ocr_pages:
             page_number = page.get("page") or page.get("page_number") or 1
-            for item in page.get("text_items", []):
+            for item in page.get("text_items", []) + page.get("ocr_text_items", []):
                 text = item.get("text", "")
                 match = pattern.search(text)
                 if not match:
                     continue
                 datum = match.group(1)
-                results.append({
+                match_data = {
                     "page": page_number,
                     "datum": datum,
                     "feature": text,
                     "type": "datum",
                     "text": text,
                     "target": item.get("center"),
-                })
+                    "source": item.get("source", "vector"),
+                }
+                results.append(match_data)
+                logger.debug("Datum detected: %s", match_data)
         return results

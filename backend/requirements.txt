@@ -25,3 +25,4 @@ openai==1.0.0
 python-dotenv==1.0.0
 pytest==8.4.2
 httpx==0.28.1
+paddlepaddle==2.6.2

@@ -1,5 +1,8 @@
+import logging
 from typing import Any
 import re
+
+logger = logging.getLogger(__name__)
 
 
 class DimensionParser:
@@ -20,24 +23,14 @@ class DimensionParser:
 
         for page in ocr_pages:
             page_number = page.get("page") or page.get("page_number") or 1
-            page_h = page.get("height", 841)
-            page_w = page.get("width", 1190)
-            margin_top = page_h * 0.05
-            margin_bottom = page_h * 0.90
-            margin_left = page_w * 0.03
-            margin_right = page_w * 0.97
 
-            for item in page.get("text_items", []):
+            for item in page.get("text_items", []) + page.get("ocr_text_items", []):
                 text = (item.get("text") or "").strip()
                 if not text:
                     continue
                 upper = text.upper()
                 center = item.get("center", [])
                 x, y = center[0] if center else 0, center[1] if center else 0
-
-                # Exclude items in page margins
-                if y < margin_top or y > margin_bottom or x < margin_left or x > margin_right:
-                    continue
 
                 # Exclude note patterns
                 if note_pattern.match(text):
@@ -75,7 +68,7 @@ class DimensionParser:
                 else:
                     dim_type = "length"
 
-                dimensions.append({
+                match_data = {
                     "page": page_number,
                     "type": dim_type,
                     "class": dim_class,  # 'basic', 'reference', or 'normal'
@@ -84,7 +77,10 @@ class DimensionParser:
                     "unit": unit,
                     "text": text,
                     "target": item.get("center"),
-                })
+                    "source": item.get("source", "vector"),
+                }
+                dimensions.append(match_data)
+                logger.debug("Dimension detected: %s", match_data)
 
         return dimensions
     

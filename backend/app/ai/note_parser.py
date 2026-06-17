@@ -1,5 +1,8 @@
+import logging
 from typing import Any
 import re
+
+logger = logging.getLogger(__name__)
 
 
 class NoteParser:
@@ -11,13 +14,16 @@ class NoteParser:
 
         for page in ocr_pages:
             page_number = page.get("page") or page.get("page_number") or 1
-            for item in page.get("text_items", []):
+            for item in page.get("text_items", []) + page.get("ocr_text_items", []):
                 text = item.get("text", "")
                 if pattern.search(text):
-                    results.append({
+                    match_data = {
                         "page": page_number,
                         "note": text,
                         "region": "annotation",
                         "target": item.get("center"),
-                    })
+                        "source": item.get("source", "vector"),
+                    }
+                    results.append(match_data)
+                    logger.debug("Note detected: %s", match_data)
         return results

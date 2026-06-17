@@ -1,5 +1,8 @@
+import logging
 from typing import Any
 import re
+
+logger = logging.getLogger(__name__)
 
 
 class GdtParser:
@@ -28,7 +31,7 @@ class GdtParser:
         
         for page in ocr_pages:
             page_number = page.get("page") or page.get("page_number") or 1
-            for item in page.get("text_items", []):
+            for item in page.get("text_items", []) + page.get("ocr_text_items", []):
                 text = (item.get("text") or "").strip()
                 if not text or len(text) < 2:
                     continue
@@ -44,7 +47,7 @@ class GdtParser:
                 # Extract datum references if present
                 datum_refs = self._extract_datum_refs(text)
                 
-                results.append({
+                match_data = {
                     "page": page_number,
                     "symbol": detected_symbol,
                     "tolerance_value": tolerance_value,
@@ -52,7 +55,10 @@ class GdtParser:
                     "tolerance_zone": self._infer_tolerance_zone(detected_symbol, tolerance_value),
                     "text": text,
                     "target": item.get("center"),
-                })
+                    "source": item.get("source", "vector"),
+                }
+                results.append(match_data)
+                logger.debug("GD&T detected: %s", match_data)
         
         return results
     

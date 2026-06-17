@@ -105,6 +105,7 @@ class OcrEngine:
             
             enhanced["ocr_text"] = ocr_text
             enhanced["ocr_tokens"] = ocr_tokens
+            enhanced["ocr_text_items"] = self._tokens_to_text_items(ocr_tokens)
             enhanced["ocr_confidence"] = avg_confidence
             
             # Merge with vector text if present
@@ -126,28 +127,32 @@ class OcrEngine:
         """Extract and convert image from page data.
         
         Args:
-            page: Page data dict with 'image' key (base64 or path)
+            page: Page data dict with 'image' key (base64, data URI, or path)
             
         Returns:
             OpenCV image array or None if extraction failed
         """
         try:
             if "image" in page:
-                # Try base64 first
-                if isinstance(page["image"], str):
+                value = page["image"]
+                if isinstance(value, str):
+                    # Support data URI images like 'data:image/png;base64,...'
+                    if value.startswith("data:") and "," in value:
+                        value = value.split(",", 1)[1]
                     try:
-                        img_data = base64.b64decode(page["image"])
+                        img_data = base64.b64decode(value)
                         img_pil = Image.open(BytesIO(img_data))
                     except Exception:
                         # Try as file path
-                        img_pil = Image.open(page["image"])
-                    
-                    # Convert to OpenCV format (BGR)
+                        img_pil = Image.open(value)
+                    img_pil = img_pil.convert("RGB")
                     img_np = np.array(img_pil)
-                    if len(img_np.shape) == 3 and img_np.shape[2] == 3:
-                        return cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-                    return img_np
-            
+                    return cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+                elif isinstance(value, bytes):
+                    img_pil = Image.open(BytesIO(value))
+                    img_pil = img_pil.convert("RGB")
+                    img_np = np.array(img_pil)
+                    return cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
             elif "image_path" in page:
                 img_pil = Image.open(page["image_path"])
                 img_np = np.array(img_pil)
@@ -180,14 +185,24 @@ class OcrEngine:
                 continue
             
             for box_result in line:
-                text = box_result[1]
-                confidence = float(box_result[2])
+                if not box_result or len(box_result) < 2:
+                    continue
+                bbox = box_result[0]
+                recog = box_result[1]
+                if isinstance(recog, (list, tuple)) and len(recog) >= 2:
+                    text = recog[0]
+                    confidence = float(recog[1])
+                elif len(box_result) >= 3:
+                    text = box_result[1]
+                    confidence = float(box_result[2])
+                else:
+                    continue
                 
                 text_lines.append(text)
                 tokens.append({
                     "text": text,
                     "confidence": confidence,
-                    "bbox": box_result[0] if len(box_result) > 3 else None
+                    "bbox": bbox,
                 })
                 confidences.append(confidence)
         
@@ -195,8 +210,35 @@ class OcrEngine:
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
         
         return full_text, tokens, avg_confidence
-    
-    def _merge_texts(self, ocr_text: str, vector_text: str) -> str:
+
+    def _tokens_to_text_items(self, tokens: list[dict]) -> list[dict]:
+        items = []
+        for token in tokens:
+            bbox = token.get("bbox")
+            center = None
+            if bbox and isinstance(bbox, list):
+                if len(bbox) == 4 and all(isinstance(x, (int, float)) for x in bbox):
+                    x0, y0, x1, y1 = bbox
+                    center = [int((x0 + x1) / 2), int((y0 + y1) / 2)]
+                elif len(bbox) == 4 and all(isinstance(point, list) and len(point) == 2 for point in bbox):
+                    xs = [point[0] for point in bbox]
+                    ys = [point[1] for point in bbox]
+                    center = [int(sum(xs) / len(xs)), int(sum(ys) / len(ys))]
+                elif len(bbox) == 8:
+                    xs = bbox[0::2]
+                    ys = bbox[1::2]
+                    center = [int(sum(xs) / len(xs)), int(sum(ys) / len(ys))]
+            items.append({
+                "text": token.get("text", ""),
+                "bbox": bbox,
+                "center": center,
+                "confidence": token.get("confidence", 0.0),
+            })
+        for item in items:
+            item["source"] = "ocr"
+        return items
+
+    def _merge_texts(self, ocr_text: str, vector_text: str or list) -> str:
         """Merge OCR and vector text, preferring vector text for precision.
         
         Args:
@@ -209,10 +251,12 @@ class OcrEngine:
         if not vector_text:
             return ocr_text
         if not ocr_text:
-            return vector_text
+            return "\n".join(vector_text) if isinstance(vector_text, list) else vector_text
         
-        # Prefer vector text but supplement with OCR for missing lines
-        vector_lines = set(vector_text.split("\n"))
+        if isinstance(vector_text, list):
+            vector_lines = set(vector_text)
+        else:
+            vector_lines = set(vector_text.split("\n"))
         ocr_lines = ocr_text.split("\n")
         
         merged_lines = list(vector_lines)

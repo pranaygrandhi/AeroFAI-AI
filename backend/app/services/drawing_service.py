@@ -57,13 +57,14 @@ class DrawingService:
             # Step 2: OCR
             self._write_result(drawing_id, {"drawing_id": drawing_id, "filename": filename, "uploaded_at": datetime.datetime.utcnow().isoformat(), "status": "ocr", "confidence_score": 0.0, "pages": parsed_pages or [], "characteristics": []})
             ocr_result = self.ocr_engine.process(file_path=target_file, pages=parsed_pages)
+            parsed_pages = ocr_result or parsed_pages
 
             # Step 3: extract dimensions and annotations
             self._write_result(drawing_id, {"drawing_id": drawing_id, "filename": filename, "uploaded_at": datetime.datetime.utcnow().isoformat(), "status": "extracting", "confidence_score": 0.0, "pages": parsed_pages or [], "characteristics": []})
-            dimensions = self.dimension_parser.parse(ocr_result)
-            gdts = self.gdt_parser.parse(ocr_result)
-            datums = self.datum_parser.parse(ocr_result)
-            notes = self.note_parser.parse(ocr_result)
+            dimensions = self.dimension_parser.parse(parsed_pages)
+            gdts = self.gdt_parser.parse(parsed_pages)
+            datums = self.datum_parser.parse(parsed_pages)
+            notes = self.note_parser.parse(parsed_pages)
 
             # Step 4: generate balloons
             self._write_result(drawing_id, {"drawing_id": drawing_id, "filename": filename, "uploaded_at": datetime.datetime.utcnow().isoformat(), "status": "ballooning", "confidence_score": 0.0, "pages": parsed_pages or [], "characteristics": []})
